@@ -39,7 +39,7 @@ from friend_requests import (
 API_TOKEN = "7916536914:AAHwtvO8hfGl2U4xcfM1fAjMLNypPFEW5JQ"
 
 # Admin user IDs
-ADMIN_USER_IDS = [7405203657, 7725409374, 7691399254, 7795345443]  # Replace with actual admin user IDs
+ADMIN_USER_IDS = [7405203657]  # Replace with actual admin user IDs
 
 # Password access dictionary
 password_access = {}
