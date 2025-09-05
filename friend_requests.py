@@ -1,3 +1,4 @@
+
 import asyncio
 import aiohttp
 import logging
@@ -37,7 +38,7 @@ stop_markup = InlineKeyboardMarkup(inline_keyboard=[
 async def fetch_users(session, token):
     """Fetch users from the API for friend requests"""
     url = "https://api.meeff.com/user/explore/v2?lng=-112.0613784790039&unreachableUserIds=&lat=33.437198638916016&locale=en"
-headers = {
+    headers = {
     'User-Agent': "okhttp/5.0.0-alpha.14",
     'Accept-Encoding': "gzip",
     'meeff-access-token': token
