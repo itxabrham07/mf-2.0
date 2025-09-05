@@ -1,3 +1,4 @@
+
 import asyncio
 import aiohttp
 import logging
@@ -8,7 +9,7 @@ from db import get_individual_spam_filter, is_already_sent, add_sent_id, get_act
 from collections import defaultdict
 import time
 from dateutil import parser
-from datetime import datetime, timezone
+
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -36,10 +37,10 @@ stop_markup = InlineKeyboardMarkup(inline_keyboard=[
 
 async def fetch_users(session, token):
     """Fetch users from the API for friend requests"""
-    url = "https://api.meeff.com/user/explore/v2?lng=71.9178802&unreachableUserIds=&lat=29.6279688&locale=en"
+    url = "https://api.meeff.com/user/explore/v2?lng=-112.0613784790039&unreachableUserIds=&lat=33.437198638916016&locale=en"
     headers = {
-    'User-Agent': "okhttp/5.0.0-alpha.14",
-    'Accept-Encoding': "gzip",
+    'User-Agent': "okhttp/4.12.0",
+    'X-Device-Info': "iPhone15Pro-iOS17.5.1-6.6.2",
     'meeff-access-token': token
 }
     try:
@@ -109,7 +110,6 @@ def format_time_used(start_time, end_time):
     else:
         return f"{seconds}s"
 
-
 async def process_users(session, users, token, user_id, bot, target_channel_id, token_name=None, token_status=None):
     """Process a batch of users and send friend requests.
     Works with both run_requests and process_all_tokens functions.
@@ -153,33 +153,13 @@ async def process_users(session, users, token, user_id, bot, target_channel_id, 
         # Skip if already sent and spam filter is enabled
         if get_individual_spam_filter(user_id, "request") and user["_id"] in already_sent_ids:
             filtered_count += 1
+            
+            # Update token status if provided
             if token_status and token_name in token_status:
                 current = token_status[token_name]
                 token_status[token_name] = (current[0], current[1] + 1, current[2])
+                
             continue
-
-        # 🎯 NEW: FILTER FOR USERS ACTIVE "JUST NOW"
-        try:
-            recent_at_str = user.get("recentAt")
-            if not recent_at_str:
-                continue # Skip user if they have no activity timestamp
-
-            last_active_time = parser.isoparse(recent_at_str)
-            now_utc = datetime.now(timezone.utc)
-            time_difference = now_utc - last_active_time
-
-            # Your "time_ago" function considers "just now" as < 1 minute (60 seconds)
-            if time_difference.total_seconds() > 60:
-                filtered_count += 1 # Count this as a filtered user
-                if token_status and token_name in token_status:
-                    current = token_status[token_name]
-                    token_status[token_name] = (current[0], current[1] + 1, current[2])
-                continue # Skip this user and move to the next one
-
-        except (parser.ParserError, TypeError):
-            # If the timestamp is invalid, skip this user
-            continue
-        # END OF NEW FILTERING BLOCK
 
         # Send friend request
         url = f"https://api.meeff.com/user/undoableAnswer/v5/?userId={user['_id']}&isOkay=1"
@@ -209,7 +189,7 @@ async def process_users(session, users, token, user_id, bot, target_channel_id, 
                     add_sent_id(user_id, "request", user["_id"])
 
                 # Format and send user details
-                details = format_user(user)
+                details = format_user(user) # CHANGED THIS LINE
                 await bot.send_message(chat_id=user_id, text=details, parse_mode="HTML")
                 
                 # Update counters
