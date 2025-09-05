@@ -10,6 +10,10 @@ from collections import defaultdict
 import time
 from dateutil import parser
 
+
+EXPLORE_URL = "https://api.meeff.com/user/explore/v2"
+
+
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -35,10 +39,55 @@ stop_markup = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Stop Requests", callback_data="stop")]
 ])
 
+async def refresh_user_pool(session, token):
+    """Refresh user pool using legitimate techniques that don't change user settings"""
+    headers = {
+        "meeff-access-token": token, 
+        "User-Agent": "okhttp/4.12.0",
+        "Accept-Encoding": "gzip",
+        "content-type": "application/json; charset=utf-8",
+        "X-Device-Info": "iPhone15Pro-iOS17.5.1-6.6.2"
+    }
+    
+    try:
+        # 1. Call dashboard endpoint first - this often refreshes the user pool
+        dashboard_url = "https://api.meeff.com/chatroom/dashboard/v1"
+        async with session.get(dashboard_url, params={'locale': 'en'}, headers=headers) as response:
+            if response.status == 200:
+                logging.info("✅ Dashboard call successful")
+        
+        # 2. Small delay between calls
+        await asyncio.sleep(1)
+        
+        # 3. Call user profile endpoint - simulates checking own profile
+        profile_url = "https://api.meeff.com/user/profile/v1"
+        async with session.get(profile_url, params={'locale': 'en'}, headers=headers) as response:
+            if response.status == 200:
+                logging.info("✅ Profile check successful")
+        
+    except Exception as e:
+        logging.error(f"❌ Refresh calls failed: {e}")
+
 async def fetch_users(session, token):
     """Fetch users from the API for friend requests"""
-    url = "https://api.meeff.com/user/explore/v2?lng=-112.0613784790039&unreachableUserIds=&lat=33.437198638916016&locale=en"
-    headers = {"meeff-access-token": token, "Connection": "keep-alive"}
+    # First make some legitimate API calls that might refresh the pool
+    await refresh_user_pool(session, token)
+    
+    # Add timestamp for cache busting
+    timestamp = int(time.time() * 1000)
+    
+    # Use your existing coordinates without variations
+    base_lat = 33.437198638916016
+    base_lng = -112.0613784790039
+    
+    url = f"{EXPLORE_URL}?lat={base_lat}&lng={base_lng}&locale=en&_t={timestamp}"
+    headers = {
+        "meeff-access-token": token, 
+        "User-Agent": "okhttp/4.12.0",
+        "Accept-Encoding": "gzip",
+        "X-Device-Info": "iPhone15Pro-iOS17.5.1-6.6.2"
+    }
+    
     try:
         async with session.get(url, headers=headers) as response:
             if response.status == 429:
