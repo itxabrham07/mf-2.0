@@ -99,39 +99,46 @@ def get_collection_summary(collection_name):
     except Exception as e:
         return {"error": str(e)}
 
-def connect_to_collection(collection_name, target_user_id):
-    """Connect to existing collection by transferring all data"""
+def connect_to_existing_collection(collection_name, target_user_id):
+    """Connect to existing collection by using it directly (no copying)"""
     try:
         # Check if source collection exists
         if collection_name not in db.list_collection_names():
             return False, f"Collection '{collection_name}' not found"
         
-        # Ensure target collection exists
-        _ensure_user_collection_exists(target_user_id)
-        
-        from_collection = db[collection_name]
-        to_collection = _get_user_collection(target_user_id)
-        
-        # Get all documents from source collection
-        all_docs = list(from_collection.find({}))
-        
-        if not all_docs:
+        # Check if collection has data
+        source_collection = db[collection_name]
+        if source_collection.count_documents({}) == 0:
             return False, "Source collection is empty"
         
-        # Clear target collection first
-        to_collection.delete_many({})
+        # Update the user ID in the collection's metadata to match the current user
+        source_collection.update_one(
+            {"type": "metadata"},
+            {
+                "$set": {
+                    "user_id": target_user_id,
+                    "connected_at": datetime.datetime.utcnow(),
+                    "connected_by": target_user_id
+                }
+            }
+        )
         
-        # Update metadata for target collection
-        for doc in all_docs:
-            if doc.get("type") == "metadata":
-                doc["user_id"] = target_user_id
-                doc["connected_at"] = datetime.datetime.utcnow()
-                doc["original_collection"] = collection_name
+        # Delete the user's current collection if it exists and is different
+        current_collection_name = f"user_{target_user_id}"
+        if current_collection_name != collection_name and current_collection_name in db.list_collection_names():
+            db[current_collection_name].drop()
         
-        # Insert all documents to target collection
-        to_collection.insert_many(all_docs)
+        # If the collection name doesn't match the expected format, rename it
+        if collection_name != current_collection_name:
+            # Copy all documents to the new collection name
+            all_docs = list(source_collection.find({}))
+            new_collection = db[current_collection_name]
+            new_collection.insert_many(all_docs)
+            
+            # Drop the old collection
+            source_collection.drop()
         
-        return True, f"Successfully connected to '{collection_name}' with {len(all_docs)} documents"
+        return True, f"Successfully connected to collection"
         
     except Exception as e:
         return False, f"Connection failed: {str(e)}"

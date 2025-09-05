@@ -1,13 +1,14 @@
 import asyncio
 import aiohttp
 import logging
-import html
+        # Use the new direct connection method
+        success, message = connect_to_existing_collection(collection_name, user_id)
 import json
 from collections import defaultdict
 from aiogram import Bot, Dispatcher, Router, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
-from aiogram.filters import Command
-from aiogram.types.callback_query import CallbackQuery
+                f"You are now using collection: <code>{collection_name}</code>\n\n"
+                f"All your bot operations will now use this collection's data.",
 from datetime import datetime, timedelta
 from aiogram.exceptions import TelegramBadRequest
 from db import (
@@ -1049,34 +1050,75 @@ async def callback_handler(callback_query: CallbackQuery):
         return
         
     elif data.startswith("toggle_status_"): # This was the line causing the error
-        idx = int(data.split("_")[-1])
-        tokens = get_tokens(user_id)
+                InlineKeyboardButton(text=display_text, callback_data=f"db_collection_menu_{collection['collection_name']}")
         if 0 <= idx < len(tokens):
             token = tokens[idx]["token"]
             old_status = tokens[idx].get("active", True)
             toggle_token_status(user_id, token)
             new_status = not old_status
 
-            await callback_query.answer(
+            "Select a collection to view details:",
                 f"{'✅ Activated' if new_status else '❌ Deactivated'} {tokens[idx]['name']}"
             )
 
             # Rebuild the manage accounts UI directly
             tokens = get_tokens(user_id)
-            current_token = get_current_account(user_id)
-
-            buttons = []
-            for i, tok in enumerate(tokens):
-                is_active = tok.get("active", True)
-                status_emoji = "✅" if is_active else "❌"
-                is_current = tok['token'] == current_token
-                account_name_display = f"{'🔹' if is_current else '▫️'} {tok['name'][:15]}{'...' if len(tok['name']) > 15 else ''}"
-
-                buttons.append([
-                    InlineKeyboardButton(text=account_name_display, callback_data=f"set_account_{i}"),
-                    InlineKeyboardButton(text=status_emoji, callback_data=f"toggle_status_{i}"),
-                    InlineKeyboardButton(text="👁️", callback_data=f"view_account_{i}")
+    
+    # Handle individual collection menu
+    if callback_query.data.startswith("db_collection_menu_"):
+        collection_name = callback_query.data.replace("db_collection_menu_", "")
+        summary = get_collection_summary(collection_name)
+        
+        if "error" in summary:
+            await callback_query.message.edit_text(
+                f"❌ <b>Error</b>\n\n"
+                f"Failed to load collection: {summary['error']}",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Back", callback_data="db_collections")]
                 ])
+            )
+            return True
+        
+        # Format collection details
+        user_id = collection_name.replace("user_", "")
+        created_date = summary.get("created_at")
+        date_str = created_date.strftime("%Y-%m-%d %H:%M") if created_date else "Unknown"
+        
+        details = (
+            f"📂 <b>Collection: {collection_name}</b>\n\n"
+            f"👤 <b>User ID:</b> {user_id}\n"
+            f"📅 <b>Created:</b> {date_str}\n"
+            f"🔑 <b>Tokens:</b> {summary.get('tokens_count', 0)} ({summary.get('active_tokens', 0)} active)\n"
+            f"📨 <b>Sent Records:</b> {summary.get('sent_records', {}).get('total', 0)}\n"
+            f"📋 <b>Info Cards:</b> {summary.get('info_cards_count', 0)}\n"
+            f"🛡️ <b>Spam Filter:</b> {'✅' if summary.get('spam_filter_enabled') else '❌'}\n"
+            f"📄 <b>Total Documents:</b> {summary.get('total_documents', 0)}\n"
+        )
+        
+        if summary.get('current_token_preview'):
+            details += f"🎯 <b>Current Token:</b> {summary['current_token_preview']}\n"
+        
+        # Show sent records breakdown
+        sent_categories = summary.get('sent_records', {}).get('categories', {})
+        if sent_categories:
+            details += "\n<b>📊 Sent Records Breakdown:</b>\n"
+            for category, count in sent_categories.items():
+                details += f"  • {category}: {count}\n"
+        
+        keyboard = [
+            [InlineKeyboardButton(text="🔗 Connect to This Collection", callback_data=f"db_connect_{collection_name}")],
+            [InlineKeyboardButton(text="🔙 Back to Collections", callback_data="db_collections")]
+        ]
+        
+        await callback_query.message.edit_text(
+            details,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        await callback_query.answer()
+        return True
+            current_token = get_current_account(user_id)
 
             buttons.append([
                 InlineKeyboardButton(text="🔙 Back", callback_data="settings_menu")
@@ -1307,45 +1349,3 @@ async def callback_handler(callback_query: CallbackQuery):
                     "🌍 <b>Starting All Countries Feature</b>\n\n"
                     "🔄 Initializing global search...",
                     reply_markup=stop_markup,
-                    parse_mode="HTML"
-                )
-                state["status_message_id"] = status_message.message_id
-                state["pinned_message_id"] = status_message.message_id
-                state["stop_markup"] = stop_markup
-                if bot: # Added check for 'bot'
-                    await bot.pin_chat_message(chat_id=user_id, message_id=status_message.message_id)
-                asyncio.create_task(run_all_countries(user_id, state, bot, get_current_account))
-                await callback_query.answer("🌍 All Countries feature started!")
-            except Exception as e:
-                logging.error(f"Error while starting All Countries feature: {e}")
-                await callback_query.message.edit_text(
-                    "❌ <b>Failed to Start</b>\n\n"
-                    "Failed to start All Countries feature.",
-                    reply_markup=start_markup,
-                    parse_mode="HTML"
-                )
-                state["running"] = False
-
-async def set_bot_commands():
-    commands = [
-        BotCommand(command="start", description="🎯 Start the bot"),
-        BotCommand(command="lounge", description="💬 Send message in the lounge"),
-        BotCommand(command="send_lounge_all", description="🔄 Send lounge message to ALL accounts"),
-        BotCommand(command="chatroom", description="📨 Send message in chatrooms"),
-        BotCommand(command="send_chat_all", description="🔄 Send chatroom message to ALL accounts"),
-        BotCommand(command="invoke", description="🔧remove disabled accounts"),
-        BotCommand(command="skip", description="⏭️ Unsubscribe"),
-        BotCommand(command="settings", description="⚙️ bot settings"),
-        BotCommand(command="add", description="➕ add a person by ID"),
-        BotCommand(command="signup", description="⚙️Meeff account"),
-        BotCommand(command="password", description="🔐Enter password for temporary access")
-    ]
-    await bot.set_my_commands(commands)
-
-async def main():
-    await set_bot_commands()
-    dp.include_router(router)
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
