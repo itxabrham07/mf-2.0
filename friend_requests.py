@@ -1,4 +1,4 @@
-import random
+
 import asyncio
 import aiohttp
 import logging
@@ -35,34 +35,14 @@ stop_markup = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Stop Requests", callback_data="stop")]
 ])
 
-CLIENT_FINGERPRINTS = [
-    {
-        'User-Agent': "okhttp/5.0.0-alpha.14",
-        'Accept-Encoding': "gzip",
-    },
-    {
-        'User-Agent': "okhttp/4.12.0",
-        'Accept-Encoding': "gzip",
-        'X-Device-Info': "Samsung-SM-G998U-Android13-6.5.1"
-    },
-    {
-        'User-Agent': "okhttp/4.9.3",
-        'Accept-Encoding': "gzip",
-        'X-Device-Info': "Google-Pixel7-Android14-6.6.0"
-    }
-]
-
 async def fetch_users(session, token):
-    """Fetch users from the API for friend requests with a random identity"""
-    url = "https://api.meeff.com/user/explore/v2?lng=-112.0613784790039&unreachableUserIds=&lat=33.437198638916016&locale=en"
-    
-    # --- NEW: Randomly select an identity for this request ---
-    headers = random.choice(CLIENT_FINGERPRINTS)
-    headers['meeff-access-token'] = token
-    headers['Connection'] = "keep-alive"
-    
-    logging.info(f"Fetching users with User-Agent: {headers.get('User-Agent')}")
-
+    """Fetch users from the API for friend requests"""
+    url = "https://api.meeff.com/user/explore/v2?lng=71.9178802&unreachableUserIds=&lat=29.6279688&locale=en"
+    headers = {
+    'User-Agent': "okhttp/5.0.0-alpha.14",
+    'Accept-Encoding': "gzip",
+    'meeff-access-token': token
+}
     try:
         async with session.get(url, headers=headers) as response:
             if response.status == 429:
