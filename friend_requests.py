@@ -35,14 +35,23 @@ stop_markup = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Stop Requests", callback_data="stop")]
 ])
 
+import time
+import random
+
 async def fetch_users(session, token):
-    """Fetch users from the API for friend requests"""
-    url = "https://api.meeff.com/user/explore/v2?lng=-112.0613784790039&unreachableUserIds=&lat=33.437198638916016&locale=en"
+    ts = int(time.time() * 1000)  # current timestamp (ms)
+    cache_bust = random.randint(100000, 999999)  # random number
+    
+    url = f"https://api.meeff.com/user/explore/v2?lng=-112.0613784790039&unreachableUserIds=&lat=33.437198638916016&locale=en&_={ts}{cache_bust}&locale=en"
+    
     headers = {
-    'User-Agent': "okhttp/4.12.0",
-    'X-Device-Info': "iPhone15Pro-iOS17.5.1-6.6.2",
-    'meeff-access-token': token
-}
+        'User-Agent': "okhttp/4.12.0",
+        'X-Device-Info': "iPhone15Pro-iOS17.5.1-6.6.2",
+        'meeff-access-token': token,
+        'Cache-Control': "no-cache",
+        'Pragma': "no-cache"
+    }
+    
     try:
         async with session.get(url, headers=headers) as response:
             if response.status == 429:
@@ -55,6 +64,7 @@ async def fetch_users(session, token):
     except Exception as e:
         logging.error(f"Fetch users failed: {e}")
         return []
+
 
 def format_user(user):
     def time_ago(dt_str):
